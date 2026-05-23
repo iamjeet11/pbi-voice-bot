@@ -415,12 +415,13 @@
   <div class="config-panel">
     <div class="config-section">
       <div class="config-title">API Settings</div>
-      <div class="config-label">Anthropic API Key</div>
-      <input class="config-input" type="password" id="apiKey" placeholder="sk-ant-..." />
+      <div class="config-label">Gemini API Key</div>
+      <input class="config-input" type="password" id="apiKey" placeholder="AIza..." />
       <div class="config-label">AI Model</div>
       <select class="voice-select" id="modelSelect">
-        <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (recommended)</option>
-        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fast)</option>
+        <option value="gemini-2.0-flash">Gemini 2.0 Flash (recommended)</option>
+        <option value="gemini-1.5-flash">Gemini 1.5 Flash (fast)</option>
+        <option value="gemini-1.5-pro">Gemini 1.5 Pro (powerful)</option>
       </select>
     </div>
 
@@ -459,7 +460,7 @@
       <div class="config-divider"></div>
       <div class="config-title">Status</div>
       <div style="font-size:12px; color:var(--text-muted); line-height:1.7;" id="statusLog">
-        Waiting for API key…
+        Waiting for Gemini API key…
       </div>
     </div>
   </div>
@@ -514,42 +515,38 @@ Rules:
     if (!text) return;
 
     const apiKey = document.getElementById('apiKey').value.trim();
-    if (!apiKey) { log('⚠️ Please enter your Anthropic API key in the config panel.'); return; }
+    if (!apiKey) { log('⚠️ Please enter your Gemini API key in the config panel.'); return; }
 
     inputEl.value = '';
     inputEl.style.height = 'auto';
     addMsg('user', text);
-    history.push({ role: 'user', content: text });
+    history.push({ role: 'user', parts: [{ text }] });
 
     const thinkEl = addMsg('thinking', '');
     thinkEl.innerHTML = '<span class="thinking-dots">Thinking</span>';
 
     try {
       const model = document.getElementById('modelSelect').value;
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 1000,
-          system: getSystemPrompt(),
-          messages: history
-        })
-      });
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: getSystemPrompt() }] },
+            contents: history
+          })
+        }
+      );
 
       const data = await res.json();
       thinkEl.remove();
 
       if (data.error) { addMsg('bot', '⚠️ API error: ' + data.error.message); log('❌ ' + data.error.message); return; }
 
-      const reply = data.content?.map(b => b.text || '').join('') || 'No response received.';
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
       addMsg('bot', reply);
-      history.push({ role: 'assistant', content: reply });
+      history.push({ role: 'model', parts: [{ text: reply }] });
       log('✅ Response received.');
 
       if (autoSpeak) speakText(reply);
