@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Power BI AI Voice Bot</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f1a;
+      --surface: #1a1a2e;
+      --surface2: #22223a;
+      --border: rgba(255,255,255,0.08);
+      --gold: #f2c811;
+      --gold-dim: rgba(242,200,17,0.15);
+      --text: #f0f0f0;
+      --text-muted: #888;
+      --text-dim: #555;
+      --green: #1d9e75;
+      --red: #e24b4a;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      height: 44px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .topbar .logo {
+      width: 26px; height: 26px;
+      background: var(--gold);
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #1a1a2e;
+    }
+    .topbar .title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .topbar .subtitle { font-size: 12px; color: var(--text-muted); }
+    .topbar .spacer { flex: 1; }
+    .status-pill {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .status-pill .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+    }
+
+    /* ── MAIN LAYOUT ── */
+    .main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    /* ── CHAT AREA ── */
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scroll-behavior: smooth;
+    }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .msg {
+      max-width: 80%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+    .msg.bot {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 3px 12px 12px 12px;
+      align-self: flex-start;
+      color: var(--text);
+    }
+    .msg.bot .msg-label {
+      font-size: 10px;
+      color: var(--gold);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .msg.user {
+      background: var(--gold-dim);
+      border: 1px solid rgba(242,200,17,0.25);
+      border-radius: 12px 3px 12px 12px;
+      align-self: flex-end;
+      color: var(--text);
+    }
+    .msg.thinking {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 3px 12px 12px 12px;
+      align-self: flex-start;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .thinking-dots::after {
+      content: '';
+      animation: dots 1.2s infinite;
+    }
+    @keyframes dots {
+      0%   { content: '.'; }
+      33%  { content: '..'; }
+      66%  { content: '...'; }
+      100% { content: '.'; }
+    }
+
+    /* ── CHIPS ── */
+    .chips-row {
+      padding: 0 16px 8px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .chip {
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .chip:hover { border-color: var(--gold); color: var(--gold); }
+
+    /* ── VOICE VISUALIZER ── */
+    .voice-viz {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 36px;
+      padding: 0 16px;
+    }
+    .voice-viz.active { display: flex; }
+    .voice-bar {
+      width: 3px;
+      background: var(--red);
+      border-radius: 3px;
+      min-height: 4px;
+      animation: wave 0.6s ease-in-out infinite alternate;
+    }
+    .voice-bar:nth-child(1) { animation-delay: 0s; }
+    .voice-bar:nth-child(2) { animation-delay: 0.1s; }
+    .voice-bar:nth-child(3) { animation-delay: 0.2s; }
+    .voice-bar:nth-child(4) { animation-delay: 0.3s; }
+    .voice-bar:nth-child(5) { animation-delay: 0.4s; }
+    .voice-bar:nth-child(6) { animation-delay: 0.5s; }
+    .voice-bar:nth-child(7) { animation-delay: 0.6s; }
+    @keyframes wave {
+      from { height: 4px; }
+      to   { height: 28px; }
+    }
+    .voice-label {
+      font-size: 11px;
+      color: var(--red);
+      margin-left: 8px;
+    }
+
+    /* ── INPUT ROW ── */
+    .input-row {
+      padding: 10px 16px 14px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .input-row textarea {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13.5px;
+      padding: 9px 12px;
+      resize: none;
+      min-height: 40px;
+      max-height: 90px;
+      line-height: 1.4;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .input-row textarea::placeholder { color: var(--text-dim); }
+    .input-row textarea:focus { border-color: rgba(242,200,17,0.4); }
+
+    .icon-btn {
+      width: 40px; height: 40px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-muted);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover { border-color: var(--gold); color: var(--gold); }
+    .icon-btn.mic-active { border-color: var(--red); color: var(--red); background: rgba(226,75,74,0.1); }
+    .icon-btn.send { background: var(--gold); color: #1a1a2e; border-color: var(--gold); }
+    .icon-btn.send:hover { opacity: 0.85; }
+    .icon-btn.speaking { border-color: var(--green); color: var(--green); background: rgba(29,158,117,0.1); }
+
+    /* ── CONFIG PANEL ── */
+    .config-panel {
+      width: 240px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+    .config-section {
+      padding: 14px 14px 0;
+    }
+    .config-section:last-child { padding-bottom: 14px; }
+    .config-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .config-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+    }
+    .config-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 12px;
+      padding: 7px 10px;
+      font-family: monospace;
+      outline: none;
+      margin-bottom: 10px;
+      transition: border-color 0.15s;
+    }
+    .config-input:focus { border-color: rgba(242,200,17,0.4); }
+    .config-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 0;
+    }
+    .context-area {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 11.5px;
+      padding: 7px 10px;
+      font-family: monospace;
+      outline: none;
+      resize: vertical;
+      min-height: 90px;
+      line-height: 1.5;
+      margin-bottom: 10px;
+      transition: border-color 0.15s;
+    }
+    .context-area:focus { border-color: rgba(242,200,17,0.4); }
+    .save-btn {
+      width: 100%;
+      padding: 8px;
+      background: var(--gold);
+      color: #1a1a2e;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .save-btn:hover { opacity: 0.85; }
+    .voice-select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 12px;
+      padding: 7px 10px;
+      outline: none;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .toggle-row span { font-size: 12px; color: var(--text-muted); }
+    .toggle {
+      width: 34px; height: 18px;
+      background: var(--border);
+      border-radius: 9px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.on { background: var(--gold); }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      left: 3px; top: 3px;
+      width: 12px; height: 12px;
+      background: white;
+      border-radius: 50%;
+      transition: left 0.2s;
+    }
+    .toggle.on::after { left: 19px; }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">PBI</div>
+  <div>
+    <div class="title">AI Voice Assistant</div>
+  </div>
+  <span class="subtitle">— embedded in Power BI</span>
+  <div class="spacer"></div>
+  <div class="status-pill"><div class="dot"></div> Ready</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- CHAT -->
+  <div class="chat-area">
+    <div class="messages" id="messages">
+      <div class="msg bot">
+        <div class="msg-label">✦ AI ASSISTANT</div>
+        Hello! I'm your Power BI voice assistant. You can type or speak your question. Try the suggestions below, or ask me anything about your data.
+      </div>
+    </div>
+
+    <div class="chips-row" id="chips">
+      <div class="chip" onclick="useChip(this)">What is the total revenue?</div>
+      <div class="chip" onclick="useChip(this)">Which region performed best?</div>
+      <div class="chip" onclick="useChip(this)">Summarize Q2 highlights</div>
+      <div class="chip" onclick="useChip(this)">Why did avg order drop?</div>
+    </div>
+
+    <div class="voice-viz" id="voiceViz">
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+      <div class="voice-bar"></div>
+      <span class="voice-label">Listening…</span>
+    </div>
+
+    <div class="input-row">
+      <textarea id="userInput" placeholder="Ask about your Power BI data…" rows="1"
+        onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button class="icon-btn" id="micBtn" onclick="toggleMic()" title="Voice input">🎙️</button>
+      <button class="icon-btn" id="speakBtn" onclick="toggleAutoSpeak()" title="Auto-speak replies">🔊</button>
+      <button class="icon-btn send" onclick="sendMessage()" title="Send">➤</button>
+    </div>
+  </div>
+
+  <!-- CONFIG PANEL -->
+  <div class="config-panel">
+    <div class="config-section">
+      <div class="config-title">API Settings</div>
+      <div class="config-label">Anthropic API Key</div>
+      <input class="config-input" type="password" id="apiKey" placeholder="sk-ant-..." />
+      <div class="config-label">AI Model</div>
+      <select class="voice-select" id="modelSelect">
+        <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (recommended)</option>
+        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fast)</option>
+      </select>
+    </div>
+
+    <div class="config-section">
+      <div class="config-divider"></div>
+      <div class="config-title">Your Data Context</div>
+      <div class="config-label">Paste your report summary / KPIs here</div>
+      <textarea class="context-area" id="dataContext">Report: Q2 2026 Sales Dashboard
+- Revenue: ₹84.2 lakh (+12.4% vs Q1)
+- Orders: 3,841 (+8.1% vs Q1)
+- Avg order value: ₹2,192 (-1.2%)
+- Return rate: 2.8% (improved)
+- Top region: West (₹31L)
+- Best month: June</textarea>
+      <button class="save-btn" onclick="saveConfig()">Save Config</button>
+    </div>
+
+    <div class="config-section">
+      <div class="config-divider"></div>
+      <div class="config-title">Voice Settings</div>
+      <div class="toggle-row">
+        <span>Auto-speak replies</span>
+        <div class="toggle on" id="autoSpeakToggle" onclick="toggleAutoSpeak()"></div>
+      </div>
+      <div class="config-label">Recognition language</div>
+      <select class="voice-select" id="langSelect">
+        <option value="en-IN">English (India)</option>
+        <option value="en-US">English (US)</option>
+        <option value="en-GB">English (UK)</option>
+        <option value="hi-IN">Hindi</option>
+        <option value="gu-IN">Gujarati</option>
+      </select>
+    </div>
+
+    <div class="config-section">
+      <div class="config-divider"></div>
+      <div class="config-title">Status</div>
+      <div style="font-size:12px; color:var(--text-muted); line-height:1.7;" id="statusLog">
+        Waiting for API key…
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let history = [];
+  let autoSpeak = true;
+  let isRecording = false;
+  let recognition = null;
+  let isSpeaking = false;
+
+  function log(msg) {
+    document.getElementById('statusLog').innerHTML = msg;
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 90) + 'px';
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
+
+  function useChip(el) {
+    document.getElementById('userInput').value = el.textContent;
+    document.getElementById('chips').style.display = 'none';
+    sendMessage();
+  }
+
+  function saveConfig() {
+    log('✅ Config saved. Ready to chat!');
+  }
+
+  function getSystemPrompt() {
+    const ctx = document.getElementById('dataContext').value.trim();
+    return `You are an AI voice assistant embedded inside a Power BI dashboard.
+Here is the current report data context:
+${ctx}
+
+Rules:
+- Answer concisely (2-4 sentences). This is a voice interface.
+- Be direct and data-focused.
+- If asked something outside the data context, say so briefly.
+- Do not use markdown, bullet points, or formatting — plain conversational text only.`;
+  }
+
+  async function sendMessage() {
+    const inputEl = document.getElementById('userInput');
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    const apiKey = document.getElementById('apiKey').value.trim();
+    if (!apiKey) { log('⚠️ Please enter your Anthropic API key in the config panel.'); return; }
+
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    addMsg('user', text);
+    history.push({ role: 'user', content: text });
+
+    const thinkEl = addMsg('thinking', '');
+    thinkEl.innerHTML = '<span class="thinking-dots">Thinking</span>';
+
+    try {
+      const model = document.getElementById('modelSelect').value;
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1000,
+          system: getSystemPrompt(),
+          messages: history
+        })
+      });
+
+      const data = await res.json();
+      thinkEl.remove();
+
+      if (data.error) { addMsg('bot', '⚠️ API error: ' + data.error.message); log('❌ ' + data.error.message); return; }
+
+      const reply = data.content?.map(b => b.text || '').join('') || 'No response received.';
+      addMsg('bot', reply);
+      history.push({ role: 'assistant', content: reply });
+      log('✅ Response received.');
+
+      if (autoSpeak) speakText(reply);
+
+    } catch (err) {
+      thinkEl.remove();
+      addMsg('bot', '⚠️ Network error. Check your API key and connection.');
+      log('❌ ' + err.message);
+    }
+  }
+
+  function addMsg(type, text) {
+    const box = document.getElementById('messages');
+    const d = document.createElement('div');
+    d.className = 'msg ' + type;
+    if (type === 'bot') {
+      d.innerHTML = '<div class="msg-label">✦ AI ASSISTANT</div>' + escHtml(text);
+    } else if (type === 'thinking') {
+      d.textContent = text;
+    } else {
+      d.textContent = text;
+    }
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+    return d;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function speakText(text) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = document.getElementById('langSelect').value;
+    utt.rate = 1.05; utt.pitch = 1;
+    utt.onstart = () => { isSpeaking = true; document.getElementById('speakBtn').classList.add('speaking'); };
+    utt.onend = () => { isSpeaking = false; document.getElementById('speakBtn').classList.remove('speaking'); };
+    window.speechSynthesis.speak(utt);
+  }
+
+  function toggleAutoSpeak() {
+    autoSpeak = !autoSpeak;
+    document.getElementById('autoSpeakToggle').classList.toggle('on', autoSpeak);
+    if (!autoSpeak && isSpeaking) window.speechSynthesis.cancel();
+  }
+
+  function toggleMic() {
+    if (isRecording) { recognition && recognition.stop(); return; }
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { log('⚠️ Voice not supported. Use Chrome or Edge.'); return; }
+
+    recognition = new SR();
+    recognition.lang = document.getElementById('langSelect').value;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      isRecording = true;
+      document.getElementById('micBtn').classList.add('mic-active');
+      document.getElementById('voiceViz').classList.add('active');
+      log('🎙️ Listening…');
+    };
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+      document.getElementById('userInput').value = transcript;
+      if (e.results[e.results.length - 1].isFinal) { stopMic(); sendMessage(); }
+    };
+    recognition.onerror = (e) => { log('❌ Mic error: ' + e.error); stopMic(); };
+    recognition.onend = () => stopMic();
+    recognition.start();
+  }
+
+  function stopMic() {
+    isRecording = false;
+    document.getElementById('micBtn').classList.remove('mic-active');
+    document.getElementById('voiceViz').classList.remove('active');
+    if (log) log('Ready.');
+  }
+</script>
+</body>
+</html>
